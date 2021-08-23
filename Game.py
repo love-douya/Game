@@ -27,6 +27,16 @@ rock_imgs = []
 for i in range(7):
     rock_imgs.append(pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), f'rock{i}.png')).convert())
 
+font_name = pg.font.match_font('arial')
+def draw_text(surf, text, size, x, y):
+    font = pg.font.Font(font_name, size)
+    # 第二个参数True让文字平顺
+    text_surface = font.render(text, True, WHITE)
+    text_rect = text_surface.get_rect()
+    text_rect.centerx = x
+    text_rect.top = y
+    surf.blit(text_surface, text_rect)
+
 class Player (pg.sprite.Sprite):
     def __init__(self):
         pg.sprite.Sprite.__init__(self)
@@ -77,7 +87,7 @@ class Rock (pg.sprite.Sprite):
         self.image_original.set_colorkey(BLACK)
         self.image = self.image_original.copy()
         self.rect = self.image.get_rect()
-        self.radius = self.rect.width * 0.85 / 2
+        self.radius = int(self.rect.width * 0.85 / 2)
         # pg.draw.circle(self.image, RED, self.rect.center, self.radius) # 为了测试圆形
         # 初始化石头的位置，随机生成0~画布宽度减去石头宽度当中的一个数作为X坐标
         self.rect.x = random.randrange(0, WIDTH - self.rect.width)
@@ -116,7 +126,7 @@ class Bullet (pg.sprite.Sprite):
     def __init__(self, x, y):
         pg.sprite.Sprite.__init__(self)
         # self.image = pg.Surface((10, 20))
-        self.image = bullet_img
+        self.image = bullet_img    
         self.image.set_colorkey(BLACK)
         self.rect = self.image.get_rect()
         # 子弹位置射程传进来的值
@@ -143,6 +153,8 @@ for i in range(8):
     rock = Rock()
     all_sprites.add(rock)
     rocks.add(rock)
+# 分数
+score = 0 
 
 # 窗口循环
 running = True
@@ -166,7 +178,8 @@ while running:
     如果删除了石头则重新生成一个石头
     '''
     hits = pg.sprite.groupcollide(rocks, bullets, True, True)
-    for hit in hits:
+    for hit in hits: 
+        score += hit.radius
         r = Rock()
         all_sprites.add(r)
         rocks.add(r)
@@ -183,6 +196,7 @@ while running:
     # blit就是画的意思
     screen.blit(backgroud_img, (0, 0))
     all_sprites.draw(screen)
+    draw_text(screen, str(score), 18, WIDTH / 2, 10)
     pg.display.update()
  
 pg.quit()
