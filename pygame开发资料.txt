@@ -1,0 +1,13 @@
+Pygame官方库文档网址：
+https://www.pygame.org/docs/
+
+免费音效 制作下载网址：
+https://www.bfxr.net/
+
+素材下载网址：
+https://opengameart.org/
+搜Jumper Pack 可得到此实力的素材下载地址（注意空格）
+
+动手能力强的可以自己画素材：
+免费素材绘画软件：
+https://www.gimp.org/ 
