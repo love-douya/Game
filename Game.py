@@ -14,6 +14,8 @@ YELLOW = (255, 255, 0)
 
 # 游戏初始化and创建窗口
 pg.init()
+# 初始化音频
+pg.mixer.init()
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption('Game')
 Clock = pg.time.Clock()
@@ -27,6 +29,17 @@ rock_imgs = []
 for i in range(7):
     rock_imgs.append(pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), f'rock{i}.png')).convert())
 
+# 载入音乐
+shoot_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'shoot.wav'))
+expl_sounds = [
+    pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'expl0.wav'))
+   ,pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'expl1.wav'))
+]
+# 载入一直播放的音乐
+pg.mixer.music.load(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'background.ogg'))
+# 调节音乐大小
+pg.mixer.music.set_volume(0.4)
+
 font_name = pg.font.match_font('arial')
 def draw_text(surf, text, size, x, y):
     font = pg.font.Font(font_name, size)
@@ -36,6 +49,27 @@ def draw_text(surf, text, size, x, y):
     text_rect.centerx = x
     text_rect.top = y
     surf.blit(text_surface, text_rect)
+
+# 删除石头后重新生成石头
+def new_rock():
+    r = Rock()
+    all_sprites.add(r)
+    rocks.add(r)
+
+# 画血条
+def draw_health(surf, hp, x, y):
+    if hp < 0:
+        hp = 0
+    BAR_LENGTH = 100
+    BAR_HEIGHT = 10
+    fill = (hp / 100) * BAR_LENGTH
+    # pg.Rect生成一个矩形
+    outline_rect = pg.Rect(x, y, BAR_LENGTH, BAR_HEIGHT)
+    fill_rect = pg.Rect(x, y, fill, BAR_HEIGHT)
+    # 画里面绿色血条
+    pg.draw.rect(surf, GREEN, fill_rect)
+    # 画外框，第四个参数写2
+    pg.draw.rect(surf, WHITE, outline_rect, 2)
 
 class Player (pg.sprite.Sprite):
     def __init__(self):
@@ -57,6 +91,7 @@ class Player (pg.sprite.Sprite):
         # self.rect.y = 200
         # 设定速度，该字段为自定义字段，不是继承字段
         self.speedx = 8
+        self.health = 100
     
     def update(self):
         # 返回的布尔值，检测键盘上每一个按键是否被按下去，如果有返回True，否则False
@@ -77,6 +112,7 @@ class Player (pg.sprite.Sprite):
         bullet = Bullet(self.rect.centerx, self.rect.top)
         all_sprites.add(bullet)
         bullets.add(bullet)
+        shoot_sound.play()
 
 class Rock (pg.sprite.Sprite):
     def __init__(self):
@@ -150,11 +186,12 @@ player = Player()
 all_sprites.add(player)  
 # 创建若干颗石头
 for i in range(8):
-    rock = Rock()
-    all_sprites.add(rock)
-    rocks.add(rock)
+    new_rock()
 # 分数
 score = 0 
+
+# -1表示音乐重复播放
+pg.mixer.music.play(-1)
 
 # 窗口循环
 running = True
@@ -179,16 +216,18 @@ while running:
     '''
     hits = pg.sprite.groupcollide(rocks, bullets, True, True)
     for hit in hits: 
+        random.choice(expl_sounds).play()
         score += hit.radius
-        r = Rock()
-        all_sprites.add(r)
-        rocks.add(r)
+        new_rock()
 
     # 如果石头撞到飞船则结束游戏，删不删除石头都无所谓了
     # 预设是矩形碰撞，pg.sprite.collide_circle参数修改成了圆形的碰撞判断，需要再给player和rock给一个属性radius
-    hits = pg.sprite.spritecollide(player, rocks, False, pg.sprite.collide_circle)     
-    if hits:
-        running = False
+    hits = pg.sprite.spritecollide(player, rocks, True, pg.sprite.collide_circle)     
+    for hit in hits:
+        new_rock()
+        player.health -= hit.radius
+        if player.health <= 0:
+            running = False
 
     # 画面显示  
     # fill((R, G, B)), ((255, 0, 0))表示255表示红色填满
@@ -197,6 +236,7 @@ while running:
     screen.blit(backgroud_img, (0, 0))
     all_sprites.draw(screen)
     draw_text(screen, str(score), 18, WIDTH / 2, 10)
+    draw_health(screen, player.health, 5, 15)
     pg.display.update()
  
 pg.quit()
