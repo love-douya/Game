@@ -23,14 +23,29 @@ Clock = pg.time.Clock()
 # 载入图片, convert函数是为了把图片转换成pygame容易读取的格式，这样画到画面比较快
 backgroud_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'background.png')).convert()
 player_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'player.png')).convert()
+player_mini_img = pg.transform.scale(player_img, (25, 19))
+player_mini_img.set_colorkey(BLACK)
 rock_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'rock.png')).convert()
 bullet_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'bullet.png')).convert()
 rock_imgs = []
 for i in range(7):
     rock_imgs.append(pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), f'rock{i}.png')).convert())
+expl_animation = {}
+expl_animation['large'] = []
+expl_animation['small'] = []
+expl_animation['player'] = []
+for i in range(9):
+    expl_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), f'expl{i}.png')).convert()
+    expl_img.set_colorkey(BLACK)
+    expl_animation['large'].append(pg.transform.scale(expl_img, (75, 75)))
+    expl_animation['small'].append(pg.transform.scale(expl_img, (30, 30)))
+    player_expl_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), f'player_expl{i}.png')).convert()
+    player_expl_img.set_colorkey(BLACK)
+    expl_animation['player'].append(player_expl_img)
 
 # 载入音乐
 shoot_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'shoot.wav'))
+die_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'rumble.ogg'))
 expl_sounds = [
     pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'expl0.wav'))
    ,pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'expl1.wav'))
@@ -71,6 +86,12 @@ def draw_health(surf, hp, x, y):
     # 画外框，第四个参数写2
     pg.draw.rect(surf, WHITE, outline_rect, 2)
 
+# 画还剩几条命(几个小飞船)
+def draw_lives(surf, lives, img, x, y):
+    for i in range(lives):
+        img_rect = img.get_rect()
+        img_rect.x = x + 30 * i
+
 class Player (pg.sprite.Sprite):
     def __init__(self):
         pg.sprite.Sprite.__init__(self)
@@ -92,8 +113,16 @@ class Player (pg.sprite.Sprite):
         # 设定速度，该字段为自定义字段，不是继承字段
         self.speedx = 8
         self.health = 100
+        self.lives = 3
+        self.hidden = False
+        self.hide_time = 0
     
     def update(self):
+        if self.hidden and pg.time.get_ticks() - self.hide_time > 1000:
+            self.hidden = False
+            self.rect.centerx = WIDTH / 2
+            self.rect.bottom = HEIGHT - 10
+
         # 返回的布尔值，检测键盘上每一个按键是否被按下去，如果有返回True，否则False
         key_pressed = pg.key.get_pressed()
         # 判断右键是否有被按下去
@@ -109,10 +138,17 @@ class Player (pg.sprite.Sprite):
             self.rect.left = 0
 
     def shoot(self):
-        bullet = Bullet(self.rect.centerx, self.rect.top)
-        all_sprites.add(bullet)
-        bullets.add(bullet)
-        shoot_sound.play()
+        if not(self.hidden):       
+            bullet = Bullet(self.rect.centerx, self.rect.top)
+            all_sprites.add(bullet)
+            bullets.add(bullet)
+            shoot_sound.play()
+    
+    def hide(self):
+        self.hidden = True
+        self.hide_time = pg.time.get_ticks()
+        # 把飞船定位到视窗外，这样就会造成飞船消失的错觉
+        self.rect.center = (WIDTH / 2, HEIGHT + 500)
 
 class Rock (pg.sprite.Sprite):
     def __init__(self):
@@ -157,7 +193,7 @@ class Rock (pg.sprite.Sprite):
             self.rect.y = random.randrange(-100, -40)
             self.speedy = random.randrange(2, 10)
             self.speedx = random.randrange(-3, 3)
- 
+
 class Bullet (pg.sprite.Sprite):
     def __init__(self, x, y):
         pg.sprite.Sprite.__init__(self)
@@ -169,12 +205,39 @@ class Bullet (pg.sprite.Sprite):
         self.rect.centerx = x
         self.rect.bottom = y
         self.speedy = -10
-    
+
     def update(self):
         self.rect.y += self.speedy
         if self.rect.bottom < 0:
             # 如果子弹的底部超过了视窗，就删除，否则消耗资源，kill为Sprite的方法
             self.kill()
+
+class Explosion (pg.sprite.Sprite):
+    def __init__(self, center, size):
+        pg.sprite.Sprite.__init__(self)
+        self.size = size
+        self.image = expl_animation[self.size][0]
+        self.rect = self.image.get_rect()
+        self.rect.center = center
+        self.frame = 0
+        # pg.time.get_ticks()回传从初始化到结束的毫秒数
+        self.last_update = pg.time.get_ticks()
+        # 至少过50毫秒到爆炸的下一张图片
+        self.frame_rate = 50
+    
+    def update(self):
+        now = pg.time.get_ticks()
+        if now - self.last_update > self.frame_rate:
+            self.last_update = now
+            self.frame += 1
+            if self.frame == len(expl_animation[self.size]):
+                # 如果更新到最后一张图片就删掉
+                self.kill()
+            else:
+                self.image = expl_animation[self.size][self.frame]
+                center = self.rect.center
+                self.rect = self.image.get_rect()
+                self.rect.center = center
 
 # 所有物体的组
 all_sprites = pg.sprite.Group()
@@ -218,6 +281,8 @@ while running:
     for hit in hits: 
         random.choice(expl_sounds).play()
         score += hit.radius
+        expl = Explosion(hit.rect.center, 'large')
+        all_sprites.add(expl)
         new_rock()
 
     # 如果石头撞到飞船则结束游戏，删不删除石头都无所谓了
@@ -226,8 +291,20 @@ while running:
     for hit in hits:
         new_rock()
         player.health -= hit.radius
+        expl = Explosion(hit.rect.center, 'small')
+        all_sprites.add(expl)
         if player.health <= 0:
-            running = False
+            death_expl = Explosion(player.rect.center, 'player')
+            all_sprites.add(death_expl)
+            die_sound.play()
+            player.lives -= 1
+            player.health = 100
+            # 死亡后隐藏飞船一段时间
+            player.hide()
+
+    # death_expl.alive()用来判断death_expl这个爆炸实例有没有被kill掉，没有就说明动画还没放完
+    if player.lives == 0 and not(death_expl.alive()):
+        running = False
 
     # 画面显示  
     # fill((R, G, B)), ((255, 0, 0))表示255表示红色填满
