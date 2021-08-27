@@ -42,9 +42,14 @@ for i in range(9):
     player_expl_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), f'player_expl{i}.png')).convert()
     player_expl_img.set_colorkey(BLACK)
     expl_animation['player'].append(player_expl_img)
+power_imgs ={}
+power_imgs['shield'] = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'shield.png')).convert()
+power_imgs['gun'] = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'gun.png')).convert()
 
 # 载入音乐
 shoot_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'shoot.wav'))
+gun_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'pow1.wav'))
+sheild_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'pow0.wav'))
 die_sound = pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'rumble.ogg'))
 expl_sounds = [
     pg.mixer.Sound(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'expl0.wav'))
@@ -55,7 +60,7 @@ pg.mixer.music.load(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'b
 # 调节音乐大小
 pg.mixer.music.set_volume(0.4)
 
-font_name = pg.font.match_font('arial')
+font_name = os.path.join(os.path.abspath('.'), 'font.ttf')
 def draw_text(surf, text, size, x, y):
     font = pg.font.Font(font_name, size)
     # 第二个参数True让文字平顺
@@ -90,7 +95,24 @@ def draw_health(surf, hp, x, y):
 def draw_lives(surf, lives, img, x, y):
     for i in range(lives):
         img_rect = img.get_rect()
-        img_rect.x = x + 30 * i
+        img_rect.x = x + 32 * i
+        img_rect.y = y
+        surf.blit(img, img_rect)
+
+def draw_init():
+    draw_text(screen, '太空生存战！', 64, WIDTH / 2, HEIGHT / 4)
+    draw_text(screen, '← →移动飞船 空白键发射子弹~', 22, WIDTH / 2, HEIGHT / 2)  
+    draw_text(screen, '按任意键开始游戏', 18, WIDTH / 2, HEIGHT * 3/4)
+    pg.display.update()
+    waiting = True
+    while waiting:
+        Clock.tick(FPS) 
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
+            # 这里不要写KEYDOWN，写KEYUP，等键盘按下去再松开游戏才开始
+            elif event.type == pg.KEYUP:
+                waiting = False
 
 class Player (pg.sprite.Sprite):
     def __init__(self):
@@ -116,13 +138,20 @@ class Player (pg.sprite.Sprite):
         self.lives = 3
         self.hidden = False
         self.hide_time = 0
+        # gun等级
+        self.gun = 1
+        self.gun_time = 0
     
     def update(self):
-        if self.hidden and pg.time.get_ticks() - self.hide_time > 1000:
+        now = pg.time.get_ticks()
+        # 让吃到闪电5000毫秒后子弹等级自动下降
+        if self.gun > 1 and now - self.gun_time > 5000:
+            self.gun -= 1
+            self.gun_time = now
+        if self.hidden and now - self.hide_time > 1000:
             self.hidden = False
             self.rect.centerx = WIDTH / 2
             self.rect.bottom = HEIGHT - 10
-
         # 返回的布尔值，检测键盘上每一个按键是否被按下去，如果有返回True，否则False
         key_pressed = pg.key.get_pressed()
         # 判断右键是否有被按下去
@@ -138,17 +167,29 @@ class Player (pg.sprite.Sprite):
             self.rect.left = 0
 
     def shoot(self):
-        if not(self.hidden):       
-            bullet = Bullet(self.rect.centerx, self.rect.top)
-            all_sprites.add(bullet)
-            bullets.add(bullet)
-            shoot_sound.play()
+        if not(self.hidden):    
+            if self.gun == 1:   
+                bullet = Bullet(self.rect.centerx, self.rect.top)
+                all_sprites.add(bullet)
+                bullets.add(bullet)
+                shoot_sound.play()
+            elif self.gun >= 2:
+                bullet1 = Bullet(self.rect.left, self.rect.centery)
+                bullet2 = Bullet(self.rect.right, self.rect.centery)
+                all_sprites.add(bullet1, bullet2)
+                bullets.add(bullet1)
+                bullets.add(bullet2)
+                shoot_sound.play()              
     
     def hide(self):
         self.hidden = True
         self.hide_time = pg.time.get_ticks()
         # 把飞船定位到视窗外，这样就会造成飞船消失的错觉
         self.rect.center = (WIDTH / 2, HEIGHT + 500)
+
+    def gunup(self):
+        self.gun += 1
+        self.gun_time = pg.time.get_ticks()
 
 class Rock (pg.sprite.Sprite):
     def __init__(self):
@@ -239,11 +280,27 @@ class Explosion (pg.sprite.Sprite):
                 self.rect = self.image.get_rect()
                 self.rect.center = center
 
+class Power (pg.sprite.Sprite):
+    def __init__(self, center):
+        pg.sprite.Sprite.__init__(self)
+        self.type = random.choice(['shield', 'gun'])
+        self.image = power_imgs[self.type]
+        self.image.set_colorkey(BLACK)
+        self.rect = self.image.get_rect()
+        self.rect.center = center
+        self.speedy = 3
+
+    def update(self):
+        self.rect.y += self.speedy
+        if self.rect.top > HEIGHT:
+            self.kill()
+
 # 所有物体的组
 all_sprites = pg.sprite.Group()
 # 判断石头和子弹是否有碰撞，需要分别给石头和子弹创建两个Sprite群组
 rocks = pg.sprite.Group()
 bullets = pg.sprite.Group()  
+powers = pg.sprite.Group()
 # 创建一个飞机
 player = Player()
 all_sprites.add(player)  
@@ -257,8 +314,13 @@ score = 0
 pg.mixer.music.play(-1)
 
 # 窗口循环
+# 显示初始画面
+show_init = True
 running = True
 while running:
+    if show_init:
+        draw_init()
+        show_init = False
     # while循环一秒最多跑60次
     Clock.tick(FPS) 
     # 取得输入
@@ -283,6 +345,11 @@ while running:
         score += hit.radius
         expl = Explosion(hit.rect.center, 'large')
         all_sprites.add(expl)
+        # random.random()返回0~1的随机数，这里设置掉宝率为9成
+        if random.random() > 0.9:
+            pow = Power(hit.rect.center)
+            all_sprites.add(pow)
+            powers.add(pow)
         new_rock()
 
     # 如果石头撞到飞船则结束游戏，删不删除石头都无所谓了
@@ -301,6 +368,18 @@ while running:
             player.health = 100
             # 死亡后隐藏飞船一段时间
             player.hide()
+    
+    # 判断宝物和飞船相撞
+    hits = pg.sprite.spritecollide(player, powers, True)
+    for hit in hits:
+        if hit.type == 'shield':
+            player.health += 20
+            if player.health > 100:
+                player.health = 100
+            sheild_sound.play()
+        elif hit.type == 'gun':
+            player.gunup()
+            gun_sound.play()
 
     # death_expl.alive()用来判断death_expl这个爆炸实例有没有被kill掉，没有就说明动画还没放完
     if player.lives == 0 and not(death_expl.alive()):
@@ -314,6 +393,7 @@ while running:
     all_sprites.draw(screen)
     draw_text(screen, str(score), 18, WIDTH / 2, 10)
     draw_health(screen, player.health, 5, 15)
+    draw_lives(screen, player.lives, player_mini_img, WIDTH - 100, 15)
     pg.display.update()
  
 pg.quit()
