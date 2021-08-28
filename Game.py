@@ -25,6 +25,7 @@ backgroud_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'i
 player_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'player.png')).convert()
 player_mini_img = pg.transform.scale(player_img, (25, 19))
 player_mini_img.set_colorkey(BLACK)
+pg.display.set_icon(player_mini_img)
 rock_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'rock.png')).convert()
 bullet_img = pg.image.load(os.path.join(os.path.join(os.path.abspath('.'), 'img'), 'bullet.png')).convert()
 rock_imgs = []
@@ -60,6 +61,7 @@ pg.mixer.music.load(os.path.join(os.path.join(os.path.abspath('.'), 'sound'), 'b
 # 调节音乐大小
 pg.mixer.music.set_volume(0.4)
 
+# font_name = pg.font.match_font('arial')
 font_name = os.path.join(os.path.abspath('.'), 'font.ttf')
 def draw_text(surf, text, size, x, y):
     font = pg.font.Font(font_name, size)
@@ -100,6 +102,8 @@ def draw_lives(surf, lives, img, x, y):
         surf.blit(img, img_rect)
 
 def draw_init():
+    # 为初始界面添加背景
+    screen.blit(backgroud_img, (0, 0))
     draw_text(screen, '太空生存战！', 64, WIDTH / 2, HEIGHT / 4)
     draw_text(screen, '← →移动飞船 空白键发射子弹~', 22, WIDTH / 2, HEIGHT / 2)  
     draw_text(screen, '按任意键开始游戏', 18, WIDTH / 2, HEIGHT * 3/4)
@@ -110,9 +114,11 @@ def draw_init():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 pg.quit()
+                return True
             # 这里不要写KEYDOWN，写KEYUP，等键盘按下去再松开游戏才开始
             elif event.type == pg.KEYUP:
                 waiting = False
+                return False
 
 class Player (pg.sprite.Sprite):
     def __init__(self):
@@ -319,8 +325,25 @@ show_init = True
 running = True
 while running:
     if show_init:
-        draw_init()
+        close = draw_init()
+        # 不加这段在关闭视窗的时候后台会有错误
+        if close:
+            break
         show_init = False
+        # 所有物体的组
+        all_sprites = pg.sprite.Group()
+        # 判断石头和子弹是否有碰撞，需要分别给石头和子弹创建两个Sprite群组
+        rocks = pg.sprite.Group()
+        bullets = pg.sprite.Group()  
+        powers = pg.sprite.Group()
+        # 创建一个飞机
+        player = Player()
+        all_sprites.add(player)  
+        # 创建若干颗石头
+        for i in range(8):
+            new_rock()
+        # 分数
+        score = 0 
     # while循环一秒最多跑60次
     Clock.tick(FPS) 
     # 取得输入
@@ -383,7 +406,7 @@ while running:
 
     # death_expl.alive()用来判断death_expl这个爆炸实例有没有被kill掉，没有就说明动画还没放完
     if player.lives == 0 and not(death_expl.alive()):
-        running = False
+        show_init = True
 
     # 画面显示  
     # fill((R, G, B)), ((255, 0, 0))表示255表示红色填满
